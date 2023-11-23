@@ -42,19 +42,22 @@ def row_and_column_test(shape, seed: int = 42):
     assert np.allclose(expected, out)
 
 if __name__ == '__main__':
-    print("row prefix sums tests")
+    print("running row prefix sums tests...", end = "")
     row_test((4, 32 * 3))
     row_test((4, 32 * 5))
     row_test((11, 32 * 3))
     row_test((32 * 3 - 1, 32 * 3))
+    print(" passed!")
 
-    print("column prefix sums tests")
+    print("running column prefix sums tests...", end = "")
     column_test((32 * 3, 4))
     column_test((32 * 5, 4))
     column_test((32 * 3, 11))
     column_test((32 * 3, 32 * 3 - 1))
+    print(" passed!")
 
-    print("2D prefix sums tests")
+    print("running 2D prefix sums tests...", end = "")
     row_and_column_test((32, 32))
     row_and_column_test((32, 32*3))
     row_and_column_test((32*3, 32))
+    print(" passed!")
