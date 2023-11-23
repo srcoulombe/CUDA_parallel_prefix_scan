@@ -37,10 +37,6 @@ def better_flat_device_scan(global_data: np.ndarray,
                             threadblock_totals: np.ndarray,
                             inclusive: bool = False,
                             axis: int = 0,):
-  # assumptions:
-  # 1. axis is in (0, 1)
-  # 2. threadblocks are either (1, D) or (D, 1)
-  # 3. blockgrid is 2D
   if axis == 0:
     THREADS_PER_BLOCK = cuda.blockDim.x
     tid = cuda.threadIdx.x
