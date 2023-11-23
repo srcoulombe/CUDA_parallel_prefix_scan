@@ -44,6 +44,5 @@ def prefix_sum(device_data_array, axis: int, warpsize: int = 32):
   better_flat_device_scan_post[shapes["post_grid_shape"], shapes["post_thread_blocks_shape"]](
       device_data_array,
       threadblock_totals,
-      axis
   )
   return device_data_array
