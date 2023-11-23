@@ -105,8 +105,7 @@ def better_flat_device_scan_post( global_data: np.ndarray,
   # s.t. threadblock_cumulative_sums[1,1] = sum(threadblock_sums[1, :1])
   bid_x = cuda.blockIdx.x
   bid_y = cuda.blockIdx.y
-  global_idx_x = (cuda.blockIdx.x * cuda.blockDim.x) + cuda.threadIdx.x
-  global_idx_y = (cuda.blockIdx.y * cuda.blockDim.y) + cuda.threadIdx.y
+  global_idx_x, global_idx_y = cuda.grid(2)
   global_data[global_idx_x, global_idx_y] += threadblock_cumulative_sums[bid_x, bid_y]
 
 
