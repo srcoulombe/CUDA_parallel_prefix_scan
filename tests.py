@@ -2,10 +2,12 @@
 
 # external dependencies
 import numpy as np
-from numba import cuda
+from numba import config, cuda
 
 # local dependencies
 from main import prefix_sum
+
+config.CUDA_LOW_OCCUPANCY_WARNINGS = False
 
 def setup(shape, seed: int = 42,):
   np.random.seed(seed)
