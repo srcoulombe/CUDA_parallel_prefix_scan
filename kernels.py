@@ -33,63 +33,6 @@ def global_memory_indexer(axis: int):
     )
 
 @cuda.jit()
-def flat_device_scan(global_data: np.ndarray,
-                     threadblock_totals: np.ndarray,
-                     inclusive: bool = False,
-                     axis: int = 0,):
-  THREADS_PER_BLOCK = cuda.blockDim.x
-  n = 2 * THREADS_PER_BLOCK
-  bid_x = cuda.blockIdx.x
-  bid_y = cuda.blockIdx.y
-  tid = cuda.threadIdx.x
-  global_indexer = global_memory_indexer(axis)
-  left_element_global_index = global_indexer[0]
-  right_element_global_index = global_indexer[1]
-  # populate shared array
-  data = cuda.shared.array(shape=(32), dtype=numba.int32)
-  data[2 * tid] = global_data[left_element_global_index]
-  data[2 * tid + 1] = global_data[right_element_global_index]
-  # upsweep
-  offset = 1
-  d = n // 2
-  while d > 0:
-    if tid < d:
-      left_index = offset * (2 * tid + 1) - 1
-      right_index = offset * (2 * tid + 2) - 1
-      data[right_index] += data[left_index]
-    offset *= 2
-    d //= 2
-  cuda.syncthreads()
-  # some setup work
-  total = data[n - 1]
-  if tid == 0:
-    data[n - 1] = 0
-    threadblock_totals[bid_y, bid_x] = total
-  # downsweep
-  d = 1
-  offset = n
-  while d < n:
-    offset //= 2
-    if tid < d:
-      left_index = offset * (2 * tid + 1) - 1
-      right_index = offset * (2 * tid + 2) - 1
-      tmp = data[left_index]
-      data[left_index] = data[right_index]
-      data[right_index] += tmp
-    d *= 2
-  cuda.syncthreads()
-  # update global data
-  if inclusive:
-    global_data[left_element_global_index] = data[2 * tid + 1]
-    if tid == THREADS_PER_BLOCK - 1:
-      global_data[right_element_global_index] = total
-    else:
-      global_data[right_element_global_index] = data[2 * tid + 2]
-  else:
-    global_data[left_element_global_index] = data[2 * tid]
-    global_data[right_element_global_index] = data[2 * tid + 1]
-
-@cuda.jit()
 def better_flat_device_scan(global_data: np.ndarray,
                             threadblock_totals: np.ndarray,
                             inclusive: bool = False,
@@ -154,33 +97,17 @@ def better_flat_device_scan(global_data: np.ndarray,
     global_data[first_element_global_index] = data[2 * tid]
     global_data[second_element_global_index] = data[2 * tid + 1]
 
-@cuda.jit()
-def flat_device_scan_post(global_data: np.ndarray,
-                          threadblock_cumulative_sums: np.ndarray):
-  threads_per_block = cuda.blockDim.x
-  tid = cuda.threadIdx.x
-  bid_x = cuda.blockIdx.x
-  bid_y = cuda.blockIdx.y
-  global_tid = (bid_x * threads_per_block) + tid
-  # this line seems off...
-  # don't we need to account for the column/row cases?
-  global_data[bid_y, global_tid] += threadblock_cumulative_sums[bid_y, bid_x]
-
 @cuda.jit
 def better_flat_device_scan_post( global_data: np.ndarray,
                                   threadblock_cumulative_sums: np.ndarray,
                                   axis: int):
+  # threadblock_cumulative_sums is a (grid.shape)-sized exclusive prefix sum array
+  # s.t. threadblock_cumulative_sums[1,1] = sum(threadblock_sums[1, :1])
   bid_x = cuda.blockIdx.x
   bid_y = cuda.blockIdx.y
-  if axis == 0:
-    tid = cuda.threadIdx.x
-    global_tid = (bid_x * cuda.blockDim.x) + tid
-    global_data[bid_y, global_tid] += threadblock_cumulative_sums[bid_y, bid_x]
-  else:
-    tid = cuda.threadIdx.y
-    global_tid = (bid_y * cuda.blockDim.y) + tid
-    global_data[bid_y, global_tid] += threadblock_cumulative_sums[bid_y, bid_x]
-
+  global_idx_x = (cuda.blockIdx.x * cuda.blockDim.x) + cuda.threadIdx.x
+  global_idx_y = (cuda.blockIdx.y * cuda.blockDim.y) + cuda.threadIdx.y
+  global_data[global_idx_x, global_idx_y] += threadblock_cumulative_sums[bid_x, bid_y]
 
 
 

@@ -5,80 +5,53 @@ import numpy as np
 from numba import cuda
 
 # local dependencies
-from kernels import (
-  flat_device_scan,
-  flat_device_scan_post,
-  CUDA_WARPSIZE,
-)
+from main import row_prefix_sums, column_prefix_sums
 
-def single_block_row_test(seed: int = 42, inclusive: bool = True):
+def setup(shape, seed: int = 42,):
   np.random.seed(seed)
-  a = np.random.randint(-10,11,CUDA_WARPSIZE).reshape((1, -1))
-  b = cuda.to_device(a)
-  threadblock_totals = cuda.to_device(
-    np.zeros(a.size // CUDA_WARPSIZE, dtype=int)
-  ).reshape((1, -1))
-  flat_device_scan[(1,1), (CUDA_WARPSIZE // 2, 1)](
-    b,
-    threadblock_totals,
-    inclusive,
-    0,
-  )
-  got = b.copy_to_host()
-  print(a)
-  print(np.cumsum(a).reshape((1, -1)))
-  print(got)
-  print(np.allclose(np.cumsum(a), got))
+  a = np.random.randint(-10, 11, shape)
+  return a
 
-def multi_block_row_test(seed: int = 42, inclusive: bool = True):
-  np.random.seed(seed)
-  a = np.random.randint(-10,11,CUDA_WARPSIZE * 3).reshape((1, -1))
-  b = cuda.to_device(a)
-  num_threadblocks = a.size // CUDA_WARPSIZE
-  threadblock_totals = cuda.to_device(
-    np.zeros(a.size // CUDA_WARPSIZE, dtype=int)
-  ).reshape((1, -1))
-  flat_device_scan[(1, num_threadblocks), (num_threadblocks, 1)](
-    b,
-    threadblock_totals,
-    inclusive,
-    0,
-  )
-  flat_device_scan[(1,1), (num_threadblocks, 1)](
-      threadblock_totals,
-      cuda.to_device(np.zeros_like(threadblock_totals)),
-      False,
-      1,
-  )
-  flat_device_scan_post[(num_threadblocks, 1), (CUDA_WARPSIZE,)](
-      b,
-      threadblock_totals,
-  )
-  got = b.copy_to_host()
-  print(a)
-  print(np.cumsum(a).reshape((1, -1)))
-  print(got)
-  print(np.allclose(np.cumsum(a), got))
+def better_row_test(shape, seed: int = 42):
+    a = setup(shape, seed = seed)
+    out = row_prefix_sums(cuda.to_device(a)).copy_to_host()
+    expected = np.cumsum(a, axis=1)
+    print(np.allclose(expected, out))
 
-def single_block_column_test(seed: int = 42, inclusive: bool = True):
-  np.random.seed(seed)
-  a = np.random.randint(-10,11,CUDA_WARPSIZE).reshape((-1, 1))
-  b = cuda.to_device(a)
-  threadblock_totals = cuda.to_device(
-    np.zeros(a.size // CUDA_WARPSIZE, dtype=int)
-  ).reshape((-1, 1))
-  flat_device_scan[(1,1), (CUDA_WARPSIZE // 2, 1)](
-    b,
-    threadblock_totals,
-    inclusive,
-    1,
-  )
-  got = b.copy_to_host()
-  print(a)
-  print(np.cumsum(a).flatten())
-  print(got)
-  print(np.allclose(np.cumsum(a).flatten(), got.flatten()))
+def better_column_test(shape, seed: int = 42):
+    a = setup(shape, seed = seed)
+    out = column_prefix_sums(cuda.to_device(a)).copy_to_host()
+    expected = np.cumsum(a, axis=0)
+    print(np.allclose(expected, out))
 
-if __name__ == "__main__":
-  single_block_row_test()
-  # multi_block_row_test()
+def better_2d_test(shape, seed: int = 42):
+    a = setup(shape, seed = seed)
+
+    out = column_prefix_sums(
+        row_prefix_sums(
+            cuda.to_device(a)
+        )
+    ).copy_to_host()
+    expected = np.cumsum(
+        np.cumsum(a, axis=0),
+        axis = 1
+    )
+    print(np.allclose(expected, out))
+
+if __name__ == '__main__':
+    print("row prefix sums tests")
+    better_row_test((4, 32 * 3))
+    better_row_test((4, 32 * 5))
+    better_row_test((11, 32 * 3))
+    better_row_test((32 * 3 - 1, 32 * 3))
+
+    print("column prefix sums tests")
+    better_column_test((32 * 3, 4))
+    better_column_test((32 * 5, 4))
+    better_column_test((32 * 3, 11))
+    better_column_test((32 * 3, 32 * 3 - 1))
+
+    print("2D prefix sums tests")
+    better_2d_test((32, 32))
+    better_2d_test((32, 32*3))
+    better_2d_test((32*3, 32))
